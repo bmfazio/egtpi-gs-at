@@ -12,6 +12,7 @@ forms.at %>%
     DISTRITO = simpletext(Distrito),
     FECHA = as_date(`Fecha de la Asistencia Técnica`),
     RESPONSABLE = simpletext(`Unidad Orgánica o Programa Social del responsable que brinda la asistencia técnica`),
+    MODALIDAD = `Modalidad que brindó la asistencia técnica`,
     CARGO = simpletext(`Cargo del responsable`),
     INTERVENCION = `Intervención en la que se brindó asistencia técnica`,
     RECIBE = `Institución que recibió la asistencia técnica`
@@ -112,11 +113,14 @@ fuzz_listo %>%
                 fecha = paste0(sprintf("%02d", month(FECHA)), year(FECHA)),
                 type = ifelse(RESPONSABLE == "DIRECCION DE ARTICULACION TERRITORIAL",
                               "CE", "PPSS"),
+                modal = MODALIDAD,
                 value = RESPONSABLE),
     by = "N_ROW"
   ) %>% ### REVISAR Q ONDA CON N_ROW == 156, POR AHORA LO IGNORAMOS
   filter(N_ROW != 156) %>%
-  group_by(UBIGEO, name, type) %>%
+  group_by(UBIGEO, fecha) %>%
+  mutate(modal = paste0(sort(unique(modal)), collapse = " y ")) %>%
+  group_by(UBIGEO, name, type, fecha) %>%
   filter(N_ROW == min(N_ROW)) %>%
   ungroup %>%
   select(-N_ROW, -type) -> at_local
@@ -125,17 +129,22 @@ fuzz_listo %>%
 egtpi %>%
   select(UBIGEO, DEPARTAMENTO, PROVINCIA, DISTRITO) %>%
   crossing(tibble(fecha = c("082022", daterange_vector))) %>%
-  crossing(tibble(name = c("AT_GL", "AT_PPSS", "CARGO_PPSS"))) %>%
+  crossing(tibble(name = c("AT_GL", "AT_PPSS", "CARGO_PPSS", "MODALIDAD"))) %>%
   left_join(
     bind_rows(
       at_local %>% mutate(value = "1"),
     at_local %>%
       filter(value != "DIRECCION DE ARTICULACION TERRITORIAL") %>%
-      mutate(name = "CARGO_PPSS")),
+      mutate(name = "CARGO_PPSS"),
+    at_local %>%
+      mutate(name = "MODALIDAD",
+             value = modal)) %>%
+      select(-modal) %>%
+      unique,
     by = c("UBIGEO", "fecha", "name")) %>%
   mutate(
     value = case_when(
-      name != "CARGO_PPSS" & is.na(value) ~ "0",
+      !(name %in% c("CARGO_PPSS", "MODALIDAD")) & is.na(value) ~ "0",
       TRUE ~ value
     ),
     name = paste0(name, "_", fecha)) %>%

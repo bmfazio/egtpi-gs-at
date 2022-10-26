@@ -1,6 +1,8 @@
 manual/*
 mid/*
 _FUZZY-at-local.xlsx
+at-local.xlsx
+at-regional.xlsx
 .Rproj.user
 .Rhistory
 .RData
