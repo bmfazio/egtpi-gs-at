@@ -1,10 +1,12 @@
-daterange_vector <- c("092022", "102022") # for regional AT
-# PENDING - make the range extensive to district AT
+daterange_vector <- c("082022", "092022",
+                      "102022", "112022") # for regional AT
+# ---- first block ----
 
 source("R/1_setup.R", encoding = "utf-8")
 source("R/2_load.R", encoding = "utf-8")
 
 forms.at %>%
+  arrange(`Marca temporal`) %>%
   transmute(
     N_ROW = 1:n(),
     DEPARTAMENTO = simpletext(Departamento),
@@ -44,13 +46,12 @@ forms.at %>%
             RESPONSABLE == "DIRECCION DE ARTICULACION TERRITORIAL" ~ "AT_GL",
           RECIBE %in% c("Gobierno Local", "IAL") &
             RESPONSABLE %in%
-            c("CUNA MAS", "JUNTOS", "PAIS", "PENSION 65", "QALI WARMA") ~ "AT_PPSS"),
-    FECHA = case_when(N_ROW==156 ~ dmy(23082022),
-                      TRUE ~ FECHA)
+            c("CUNA MAS", "JUNTOS", "PAIS", "PENSION 65", "QALI WARMA") ~ "AT_PPSS")
   ) %>% select(-CARGO) -> at.pretidy
 
 ###
-at.pretidy %>% filter(is.na(CATEGORIA)) %>% write_xlsx("mid/exclusiones-at.xlsx")
+at.pretidy %>% write_xlsx("mid/tabla-at.xlsx")
+at.pretidy %>% filter(is.na(CATEGORIA)) %>% write_xlsx("mid/exclusiones-categoria.xlsx")
 at.pretidy %>% filter(!is.na(CATEGORIA)) -> at.tidy
 if(any(!unique(at.tidy$DEPARTAMENTO) %in% unique(egtpi$DEPARTAMENTO)))stop("DEPARTAMENTO NO IDENTIFICADO")
 
@@ -64,7 +65,7 @@ egtpi %>%
                     times = length(.)/(3*length(daterange_vector)))) %>%
   left_join(
     at.tidy %>%
-      filter(FECHA >= "2022-09-01",
+      filter(FECHA >= dmy(paste0("01",daterange_vector[1])),
              CATEGORIA %in% c("AT_ETR", "AT_ETL", "AT_GORE")) %>%
       transmute(
         DEPARTAMENTO,
@@ -93,9 +94,16 @@ at.tidy %>%
 
 write_xlsx(fuzz_prefix, "_FUZZY-at-local.xlsx")
 
+# ---- second block ----
 #### INTERVENCION MANUAL PARA CORREGIR EMPALMES
 
 read_xlsx("_FUZZY-at-local-LISTO.xlsx") -> fuzz_listo
+
+at.tidy %>%
+  left_join(fuzz_listo %>% select(N_ROW, RESULTADO), by = "N_ROW") %>%
+  filter(RESULTADO == "NO") %>%
+  select(-RESULTADO) %>%
+  write_xlsx("mid/exclusiones-distrito.xlsx")
 
 fuzz_listo %>%
   filter(RESULTADO != "NO") %>%
@@ -116,8 +124,7 @@ fuzz_listo %>%
                 modal = MODALIDAD,
                 value = RESPONSABLE),
     by = "N_ROW"
-  ) %>% ### REVISAR Q ONDA CON N_ROW == 156, POR AHORA LO IGNORAMOS
-  filter(N_ROW != 156) %>%
+  ) %>%
   group_by(UBIGEO, fecha) %>%
   mutate(modal = paste0(sort(unique(modal)), collapse = " y ")) %>%
   group_by(UBIGEO, name, type, fecha) %>%
@@ -128,7 +135,7 @@ fuzz_listo %>%
 #
 egtpi %>%
   select(UBIGEO, DEPARTAMENTO, PROVINCIA, DISTRITO) %>%
-  crossing(tibble(fecha = c("082022", daterange_vector))) %>%
+  crossing(tibble(fecha = c(daterange_vector))) %>%
   crossing(tibble(name = c("AT_GL", "AT_PPSS", "CARGO_PPSS", "MODALIDAD"))) %>%
   left_join(
     bind_rows(
