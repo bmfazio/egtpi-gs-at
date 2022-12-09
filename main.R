@@ -1,5 +1,7 @@
-daterange_vector <- c("082022", "092022",
-                      "102022", "112022") # for regional AT
+daterange_vector <- c("052022", "062022",
+                      "072022", "082022",
+                      "092022", "102022",
+                      "112022")
 # ---- first block ----
 
 source("R/1_setup.R", encoding = "utf-8")
@@ -133,6 +135,17 @@ fuzz_listo %>%
   select(-N_ROW, -type) -> at_local
 
 #
+at_cunamas %>%
+  transmute(UBIGEO, name = "AT_PPSS",
+            fecha = case_when(
+              MES == "MAYO" ~ "05",
+              MES == "JUNIO" ~ "06",
+              MES == "JULIO" ~ "07",
+              MES == "AGOSTO" ~ "08"
+            ) %>% paste0("2022"),
+            modal = "-",
+            value = "CUNA MAS") -> cuna_tab
+#
 egtpi %>%
   select(UBIGEO, DEPARTAMENTO, PROVINCIA, DISTRITO) %>%
   crossing(tibble(fecha = c(daterange_vector))) %>%
@@ -140,12 +153,31 @@ egtpi %>%
   left_join(
     bind_rows(
       at_local %>% mutate(value = "1"),
+      cuna_tab %>% mutate(value = "1"),
+      at_vieja %>% mutate(value = "1"),
     at_local %>%
       filter(value != "DIRECCION DE ARTICULACION TERRITORIAL") %>%
       mutate(name = "CARGO_PPSS"),
+    cuna_tab %>%
+      mutate(name = "CARGO_PPSS"),
+    at_vieja %>%
+      mutate(name = "CARGO_PPSS"),
     at_local %>%
       mutate(name = "MODALIDAD",
-             value = modal)) %>%
+             value = modal),
+    cuna_tab %>%
+      mutate(name = "MODALIDAD",
+             value = modal),
+    at_vieja %>%
+      mutate(name = "MODALIDAD",
+             value = modal)
+    ) %>%
+      group_by(UBIGEO, name, fecha) %>%
+      mutate(reps = n()) %>%
+      filter(reps == 1 | value != "-") %>%
+      mutate(reps = n()) %>%
+      filter(reps == 1 | modal != "-") %>%
+      select(-reps) %>%
       select(-modal) %>%
       unique,
     by = c("UBIGEO", "fecha", "name")) %>%
@@ -158,4 +190,6 @@ egtpi %>%
   select(-fecha) %>%
   pivot_wider() %>%
   arrange(UBIGEO) %>%
+  mutate(across(starts_with("AT_GL"), ~ as.numeric(.x))) %>%
+  mutate(across(starts_with("AT_PPSS"), ~ as.numeric(.x))) %>%
   write_xlsx("at-local.xlsx")

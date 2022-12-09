@@ -1,5 +1,6 @@
 # pegar las ATs en formato horrible de junio y julio a los UBIGEOS totales
 library(dplyr)
+library(tidyr)
 library(readxl)
 
 killna <- function(x){y<-x[!is.na(x)];if(length(y)==0){return(NA)}else{return(unique(y))}}
@@ -28,5 +29,24 @@ egtpi %>%
                 AT_JULIO = max(AT_JULIO),
                 MOD_JULIO = killna(MOD_JULIO),
                 IAL_JULIO = max(IAL_JULIO)),
-            by = "UBIGEO") %>%
-  writexl::write_xlsx("out/at-vieja.xlsx")
+            by = "UBIGEO") -> meh
+
+bind_rows(
+  meh %>%
+    select(-IAL_JULIO, -MOD_JULIO, -AT_JULIO) %>%
+    transmute(UBIGEO,
+              name = "AT_PPSS",
+              fecha = "062022",
+              modal = MOD_JUNIO,
+              value = "-"),
+  meh %>%
+    select(-IAL_JUNIO, -MOD_JUNIO, -AT_JUNIO) %>%
+    transmute(UBIGEO,
+              name = "AT_PPSS",
+              fecha = "072022",
+              modal = MOD_JULIO,
+              value = "-")
+) %>%
+  filter(!is.na(modal)) %>%
+  mutate(modal = ifelse(modal == 1, "Presencial", "Virtual")) %>%
+  write_xlsx("out/at-vieja.xlsx")
